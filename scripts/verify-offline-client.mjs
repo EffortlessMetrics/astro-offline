@@ -155,6 +155,15 @@ try {
     installingWorker.dispatchEvent(new Event("statechange"));
     installingRegistration.dispatchEvent(new Event("updatefound"));
     assert(installingLifecycle.length === count, "disposer removes worker and registration lifecycle listeners");
+    const activatingWorker = Object.assign(new EventTarget(), {scriptURL: location.origin + "/sw.js", state: "activating"});
+    fake.getRegistration = async () => ({active: activatingWorker});
+    const activationFailures = [];
+    const stopActivating = installOfflineRegistration({workerURL: "/sw.js", reuseExisting: true, onLifecycle: (state, details) => {if(state === "failed") activationFailures.push(details.error.message);}});
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    activatingWorker.state = "redundant";
+    activatingWorker.dispatchEvent(new Event("statechange"));
+    assert(activationFailures.length === 1 && /during activation/.test(activationFailures[0]), "activation failure is distinguished from waiting replacement");
+    stopActivating();
     const trackedTarget = (values) => {
       const target = Object.assign(new EventTarget(), values);
       const attached = new Set();

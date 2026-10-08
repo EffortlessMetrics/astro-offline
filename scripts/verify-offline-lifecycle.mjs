@@ -10,7 +10,7 @@ const packageRoot = process.env.OFFLINE_PACKAGE_ROOT ?? fileURLToPath(new URL(".
 const { generateOfflineWorker } = await import(pathToFileURL(join(packageRoot, "src/integration.mjs")));
 const client = await readFile(join(packageRoot, "src/client.js"));
 const browser = await chromium.launch();
-async function scenario(transformInitially, rejectUpdate) {
+async function scenario(transformInitially, rejectUpdate, replaceWaiting = false) {
   const root = await mkdtemp(join(tmpdir(), "offline-lifecycle-"));
   const build = async (marker) => {
     await writeFile(join(root, "index.html"), `<h1>${marker}</h1><a href="mailto:neutral@example.invalid">Contact</a>`);
@@ -61,6 +61,23 @@ async function scenario(transformInitially, rejectUpdate) {
     if (!transformInitially) {
       await page.waitForFunction(() => window.lifecycle.some((event) => event.state === "active"), undefined, { timeout: 5000 });
       assert.equal(await page.evaluate(() => window.lifecycle.some((event) => event.state === "installed")), true);
+      if (replaceWaiting) {
+        const controlled = await context.newPage();
+        await controlled.goto(origin);
+        await controlled.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+        await build("build B");
+        await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
+        await page.waitForFunction(() => window.lifecycle.filter((event) => event.state === "installed").length === 2, undefined, { timeout: 5000 });
+        await page.evaluate(async () => { window.previousWaiting = (await navigator.serviceWorker.getRegistration()).waiting; });
+        assert.equal(await page.evaluate(() => window.previousWaiting.state), "installed");
+        await build("build C");
+        await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
+        await page.waitForFunction(() => window.lifecycle.filter((event) => event.state === "installed").length === 3, undefined, { timeout: 5000 });
+        assert.equal(await page.evaluate(() => window.previousWaiting.state), "redundant");
+        assert.equal(await page.evaluate(() => window.lifecycle.some((event) => event.state === "failed")), false);
+        console.log("PASS real waiting worker replacement is not reported as installation failure");
+        return;
+      }
       if (rejectUpdate) {
         await build("build B");
         transformed = true;
@@ -97,6 +114,7 @@ try {
   await scenario(true, false);
   await scenario(false, false);
   await scenario(false, true);
+  await scenario(false, false, true);
 } finally {
   await browser.close();
 }

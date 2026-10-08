@@ -27,7 +27,7 @@ export interface OfflineRegistrationOptions {
       workerURL: string;
       hasActiveWorker: boolean;
       controlsPage: boolean;
-      /** Redundancy before activation; the browser does not expose its cause. */
+      /** Redundancy during installation/activation; browsers do not expose its cause. */
       error?: Error;
     },
   ) => void;

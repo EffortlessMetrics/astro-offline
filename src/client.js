@@ -54,10 +54,11 @@ export function installOfflineRegistration(options) {
       let activated = worker.state === "activated";
       const report = () => {
         if (disposed || worker.state === previous) return;
+        const prior = previous;
         previous = worker.state;
         if (worker.state === "activated") activated = true;
-        // Retirement of a previously active worker is normal replacement.
-        if (worker.state === "redundant" && activated) return;
+        // Superseding a waiting worker and retiring an active worker are normal.
+        if (worker.state === "redundant" && (activated || prior === "installed")) return;
         const state = {
           installing: "installing",
           installed: "installed",
@@ -71,7 +72,9 @@ export function installOfflineRegistration(options) {
             hasActiveWorker: registration.active?.state === "activated",
             controlsPage: navigator.serviceWorker.controller === worker,
             ...(state === "failed"
-              ? { error: new Error("Service worker became redundant before activation") }
+              ? { error: new Error(prior === "activating"
+                  ? "Service worker became redundant during activation"
+                  : "Service worker became redundant before activation") }
               : {}),
           });
       };
