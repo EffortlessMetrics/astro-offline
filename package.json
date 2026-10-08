@@ -1,6 +1,6 @@
 {
   "name": "@effortlessmetrics/astro-offline",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": false,
   "description": "Workbox-based static Astro corpus builds and deferred service-worker registration",
   "license": "MIT OR Apache-2.0",
@@ -51,7 +51,7 @@
   },
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "test": "node scripts/verify-offline-client.mjs && node scripts/verify-offline-api.mjs && node scripts/verify-offline-api.mjs --claim && node scripts/verify-offline.mjs && node scripts/verify-offline.mjs --claim && node scripts/verify-offline-freshness.mjs",
+    "test": "node scripts/verify-offline-client.mjs && node scripts/verify-offline-lifecycle.mjs && node scripts/verify-offline-api.mjs && node scripts/verify-offline-api.mjs --claim && node scripts/verify-offline.mjs && node scripts/verify-offline.mjs --claim && node scripts/verify-offline-freshness.mjs",
     "verify:packed": "node scripts/verify-packed.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },

@@ -26,6 +26,7 @@ export function installOfflineRegistration(options) {
     ownershipGuard = false,
     reuseExisting = false,
     onState = () => {},
+    onLifecycle,
     canRegister,
   } = options;
   const connection = navigator.connection;
@@ -35,6 +36,7 @@ export function installOfflineRegistration(options) {
     timer;
   const listeners = [];
   const listen = (target, event, fn) => {
+    if (disposed) return;
     target?.addEventListener?.(event, fn);
     listeners.push(() => target?.removeEventListener?.(event, fn));
   };
@@ -42,6 +44,48 @@ export function installOfflineRegistration(options) {
     backgroundDownloadsAllowed(connection, navigator.onLine) &&
     (!requireVisible || document.visibilityState === "visible") &&
     canRegister?.() !== false;
+  const observeRegistration = (registration) => {
+    if (disposed || !onLifecycle || !registration) return;
+    const observed = new Set();
+    const observe = (worker) => {
+      if (disposed || !worker || observed.has(worker)) return;
+      observed.add(worker);
+      let previous;
+      let activated = worker.state === "activated";
+      const report = () => {
+        if (disposed || worker.state === previous) return;
+        previous = worker.state;
+        if (worker.state === "activated") activated = true;
+        // Retirement of a previously active worker is normal replacement.
+        if (worker.state === "redundant" && activated) return;
+        const state = {
+          installing: "installing",
+          installed: "installed",
+          activating: "activating",
+          activated: "active",
+          redundant: "failed",
+        }[worker.state];
+        if (state)
+          onLifecycle(state, {
+            workerURL: worker.scriptURL,
+            hasActiveWorker: registration.active?.state === "activated",
+            controlsPage: navigator.serviceWorker.controller === worker,
+            ...(state === "failed"
+              ? { error: new Error("Service worker became redundant before activation") }
+              : {}),
+          });
+      };
+      listen(worker, "statechange", report);
+      report();
+    };
+    const snapshot = () => {
+      observe(registration.active);
+      observe(registration.waiting);
+      observe(registration.installing);
+    };
+    listen(registration, "updatefound", snapshot);
+    snapshot();
+  };
   const register = async () => {
     if (disposed || !loaded || started) return;
     if (!allowed()) {
@@ -64,12 +108,19 @@ export function installOfflineRegistration(options) {
         }
         if (reuseExisting && workers.length) {
           onState("registered");
+          observeRegistration(current);
           return;
         }
       }
       if (disposed) return;
-      await navigator.serviceWorker.register(workerURL, { scope, updateViaCache: "none" });
-      if (!disposed) onState("registered");
+      const registration = await navigator.serviceWorker.register(workerURL, {
+        scope,
+        updateViaCache: "none",
+      });
+      if (!disposed) {
+        onState("registered");
+        observeRegistration(registration);
+      }
     } catch (error) {
       started = false;
       if (!disposed) onState("unavailable", error);
