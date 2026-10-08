@@ -113,6 +113,83 @@ try {
       registrationStates.length === 1 && registrationStates[0] === "registering",
       "disposal suppresses delayed registration callback",
     );
+    const activeWorker = Object.assign(new EventTarget(), {
+      scriptURL: location.origin + "/sw.js",
+      state: "activated",
+    });
+    const registration = Object.assign(new EventTarget(), { active: activeWorker });
+    fake.getRegistration = async () => registration;
+    const reusedStates = [];
+    const reusedLifecycle = [];
+    const stopReused = installOfflineRegistration({
+      workerURL: "/sw.js",
+      reuseExisting: true,
+      onState: (state) => reusedStates.push(state),
+      onLifecycle: (state) => reusedLifecycle.push(state),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert(reusedStates.includes("registered") && reusedLifecycle.includes("active"), "reuse observes an existing activated worker");
+    activeWorker.state = "redundant";
+    activeWorker.dispatchEvent(new Event("statechange"));
+    assert(!reusedLifecycle.includes("failed"), "normal activated worker retirement is not failure");
+    stopReused();
+    const installingWorker = Object.assign(new EventTarget(), {
+      scriptURL: location.origin + "/sw.js",
+      state: "installing",
+    });
+    const installingRegistration = Object.assign(new EventTarget(), { installing: installingWorker });
+    fake.getRegistration = async () => installingRegistration;
+    const installingLifecycle = [];
+    const stopInstalling = installOfflineRegistration({
+      workerURL: "/sw.js", reuseExisting: true,
+      onLifecycle: (state) => installingLifecycle.push(state),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert(installingLifecycle.includes("installing"), "reuse observes incomplete installation");
+    installingWorker.state = "redundant";
+    installingWorker.dispatchEvent(new Event("statechange"));
+    assert(installingLifecycle.includes("failed"), "reused installing worker failure is surfaced");
+    stopInstalling();
+    const count = installingLifecycle.length;
+    installingWorker.state = "activated";
+    installingWorker.dispatchEvent(new Event("statechange"));
+    installingRegistration.dispatchEvent(new Event("updatefound"));
+    assert(installingLifecycle.length === count, "disposer removes worker and registration lifecycle listeners");
+    const activatingWorker = Object.assign(new EventTarget(), {scriptURL: location.origin + "/sw.js", state: "activating"});
+    fake.getRegistration = async () => ({active: activatingWorker});
+    const activationFailures = [];
+    const stopActivating = installOfflineRegistration({workerURL: "/sw.js", reuseExisting: true, onLifecycle: (state, details) => {if(state === "failed") activationFailures.push(details.error.message);}});
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    activatingWorker.state = "redundant";
+    activatingWorker.dispatchEvent(new Event("statechange"));
+    assert(activationFailures.length === 1 && /during activation/.test(activationFailures[0]), "activation failure is distinguished from waiting replacement");
+    stopActivating();
+    const trackedTarget = (values) => {
+      const target = Object.assign(new EventTarget(), values);
+      const attached = new Set();
+      const add = target.addEventListener.bind(target);
+      const remove = target.removeEventListener.bind(target);
+      target.addEventListener = (event, fn) => { attached.add(fn); add(event, fn); };
+      target.removeEventListener = (event, fn) => { attached.delete(fn); remove(event, fn); };
+      target.listenerCount = () => attached.size;
+      return target;
+    };
+    for (const disposeFrom of ["registration", "lifecycle"]) {
+      const active = trackedTarget({ scriptURL: location.origin + "/sw.js", state: "activated" });
+      const waiting = trackedTarget({ scriptURL: location.origin + "/sw.js", state: "installed" });
+      const current = trackedTarget({ active, waiting });
+      fake.getRegistration = async () => current;
+      let dispose;
+      const lifecycle = [];
+      dispose = installOfflineRegistration({
+        workerURL: "/sw.js", reuseExisting: true,
+        onState: (state) => { if (disposeFrom === "registration" && state === "registered") dispose(); },
+        onLifecycle: (state) => { lifecycle.push(state); if (disposeFrom === "lifecycle") dispose(); },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert(current.listenerCount() + active.listenerCount() + waiting.listenerCount() === 0, "callback disposal leaves no lifecycle listeners: " + disposeFrom);
+      assert(lifecycle.length === (disposeFrom === "registration" ? 0 : 1), "callback disposal suppresses later snapshots: " + disposeFrom);
+    }
     return checks;
   });
   const output =

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 - unpublished lifecycle diagnostics candidate
+
+Add optional `onLifecycle` installation/activation/failure diagnostics while preserving `onState` registration callback semantics. Surface a redundant pre-activation worker without weakening byte integrity, and distinguish failed updates from surviving active workers. Real generated-worker tests cover transformed HTML rejection, successful activation/offline support and previous-corpus retention. Document byte-stable hosted delivery; no npm publication or consumer deployment.
+
 ## 0.1.2 - unpublished independent repository candidate
 
 Move source ownership to EffortlessMetrics/astro-offline, with standalone lockfile, browser contracts and CI. Preserve runtime APIs and cache-first default; consumers may opt into network-first. No registry publication.
