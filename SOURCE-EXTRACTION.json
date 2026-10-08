@@ -1,0 +1,7 @@
+{
+  "sourceRepository": "https://github.com/EffortlessMetrics/astromache",
+  "sourceCommit": "bf4095a5b9588a5fb54beee5b28f690531dbce32",
+  "sourceDirectory": "packages/offline",
+  "history": "fresh independent root; public owner code only",
+  "runtimeChanges": false
+}
