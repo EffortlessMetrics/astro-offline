@@ -63,13 +63,16 @@ export function installWorker(policy, entries, revision, prefix) {
   const excluded = (path) =>
     path === "/api" ||
     ["/api/", ...(policy.excludedPrefixes ?? [])].some((prefix) => path.startsWith(prefix));
-  const candidates = (url) => {
+  const candidates = (url, request) => {
     const clean = new URL(url);
     if (policy.stripQuery) clean.search = "";
     const values = [clean.pathname];
-    if (!/\.[^/]+$/.test(clean.pathname))
+    if (!/\.[^/]+$/.test(clean.pathname)) {
+      if (request.mode === "navigate" && !clean.pathname.endsWith("/"))
+        values.push(clean.pathname + "/");
       values.push(clean.pathname.replace(/\/$/, "") + "/index.html");
-    return values;
+    }
+    return values.filter((path) => !excluded(path));
   };
   registerRoute(
     ({ request, url }) =>
@@ -77,7 +80,7 @@ export function installWorker(policy, entries, revision, prefix) {
       url.origin === self.location.origin &&
       !excluded(url.pathname) &&
       (policy.stripQuery || !url.search) &&
-      candidates(url).some((path) => controller.getCacheKeyForURL(path)),
+      candidates(url, request).some((path) => controller.getCacheKeyForURL(path)),
     async ({ request, url }) => {
       // Keep verified precaches immutable. Online documents revalidate through
       // HTTP; only a transport failure/timeout falls back to this worker's build.
@@ -92,9 +95,19 @@ export function installWorker(policy, entries, revision, prefix) {
           clearTimeout(deadline);
         }
       }
-      for (const path of candidates(url)) {
+      for (const path of candidates(url, request)) {
         const response = await controller.matchPrecache(path);
-        if (response) return response;
+        if (response) {
+          // Directory HTML needs its canonical URL for relative links/assets.
+          // Redirect only after finding a verified navigation alias, never an
+          // arbitrary path or an extensionless resource request.
+          if (path === url.pathname + "/") {
+            const canonical = new URL(url);
+            canonical.pathname = path;
+            return Response.redirect(canonical.href, 302);
+          }
+          return response;
+        }
       }
       return fetch(request);
     },

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 - unpublished canonical navigation candidate
+
+Resolve slashless extensionless document navigations against verified canonical directory entries. Redirect offline aliases to preserve relative document URLs while keeping exact entries first, resource requests unchanged, query/API exclusions, immutable integrity-checked caches and natural activation. Real browser controls cover canonical/slashless offline reading, relative assets, reconnect redirects and current HTML. No registry publication or consumer deployment.
+
 ## 0.1.3 - unpublished lifecycle diagnostics candidate
 
 Add optional `onLifecycle` installation/activation/failure diagnostics while preserving `onState` registration callback semantics. Surface a redundant pre-activation worker without weakening byte integrity, and distinguish failed updates from surviving active workers. Real generated-worker tests cover transformed HTML rejection, successful activation/offline support and previous-corpus retention. Document byte-stable hosted delivery; no npm publication or consumer deployment.
