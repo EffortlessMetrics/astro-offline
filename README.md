@@ -1,6 +1,6 @@
 # @effortlessmetrics/astro-offline
 
-Unpublished 0.1.4 standalone repository candidate: reusable Workbox7.4.1 static Astro corpus builds and browser registration. No deployment or registry publication is implied.
+Unpublished 0.1.5 standalone repository candidate: reusable Workbox7.4.1 static Astro corpus builds and browser registration. This patch candidate carries explicit index-document navigation aliases for directory-only corpora. No deployment or registry publication is implied.
 
 Import astroOffline (default) or generateOfflineWorker(directory, policy) from /integration. Import installOfflineRegistration(options) and backgroundDownloadsAllowed from /client. These are separate Node build and browser/SSR-safe entry points; no Node/Workbox build dependencies are imported by the client entry.
 
