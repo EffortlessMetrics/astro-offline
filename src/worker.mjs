@@ -72,6 +72,10 @@ export function installWorker(policy, entries, revision, prefix) {
         values.push(clean.pathname + "/");
       values.push(clean.pathname.replace(/\/$/, "") + "/index.html");
     }
+    // Explicit index documents share the directory base for relative assets.
+    // Keep an exact precached file first; only navigations gain this alias.
+    if (request.mode === "navigate" && clean.pathname.endsWith("/index.html"))
+      values.push(clean.pathname.slice(0, -"index.html".length));
     return values.filter((path) => !excluded(path));
   };
   registerRoute(

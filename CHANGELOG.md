@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased - explicit index document aliases
+
+Allow explicit `index.html` document navigations to read verified directory-only corpus entries, including root and nested routes. Preserve exact cached files, resource requests, query and exclusion policies, relative assets and immutable caches. Browser qualification covers directory-only and index-file corpora through three offline/reconnect cycles. No package publication or consumer upgrade.
+
 ## 0.1.4 - unpublished canonical navigation candidate
 
 Resolve slashless extensionless document navigations against verified canonical directory entries. Redirect offline aliases to preserve relative document URLs while keeping exact entries first, resource requests unchanged, query/API exclusions, immutable integrity-checked caches and natural activation. Real browser controls cover canonical/slashless offline reading, relative assets, reconnect redirects and current HTML. No registry publication or consumer deployment.
