@@ -78,6 +78,42 @@ export function installWorker(policy, entries, revision, prefix) {
       values.push(clean.pathname.slice(0, -"index.html".length));
     return values.filter((path) => !excluded(path));
   };
+  const pagePayloads = policy.offlinePagePayloads ?? {};
+  registerRoute(
+    ({ request, url }) =>
+      request.method === "GET" &&
+      request.mode === "navigate" &&
+      url.origin === self.location.origin &&
+      !excluded(url.pathname) &&
+      (policy.stripQuery || !url.search) &&
+      Object.hasOwn(pagePayloads, url.pathname),
+    async ({ request, url }) => {
+      const abort = new AbortController();
+      const deadline = setTimeout(() => abort.abort(), policy.navigationTimeoutMs ?? 1000);
+      try {
+        return await fetch(request, { cache: "no-cache", signal: abort.signal });
+      } catch {
+        const response = await controller.matchPrecache(pagePayloads[url.pathname]);
+        if (!response) throw new Error("Verified offline page payload unavailable");
+        const bytes = await response.arrayBuffer();
+        const actual = Array.from(
+          new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+          (byte) => byte.toString(16).padStart(2, "0"),
+        ).join("");
+        const expected = /^\/offline-payload\/([a-f0-9]{64})\.txt$/.exec(
+          pagePayloads[url.pathname],
+        )?.[1];
+        if (!expected || actual !== expected) throw new Error("Offline page payload integrity mismatch");
+        const headers = new Headers(response.headers);
+        headers.set("Content-Type", "text/html; charset=utf-8");
+        for (const header of ["content-length", "content-encoding", "content-disposition", "etag"])
+          headers.delete(header);
+        return new Response(bytes, { status: 200, headers });
+      } finally {
+        clearTimeout(deadline);
+      }
+    },
+  );
   registerRoute(
     ({ request, url }) =>
       request.method === "GET" &&

@@ -75,6 +75,17 @@ export async function generateOfflineWorker(directory, options) {
     revisionHash.update(url).update(body);
     entries.push({ url, digest });
   }
+  const pagePayloads = worker.offlinePagePayloads ?? {};
+  if (Object.keys(pagePayloads).length && worker.navigationStrategy !== "network-first")
+    throw new Error("Offline page payloads require network-first navigation");
+  for (const [page, payload] of Object.entries(pagePayloads)) {
+    if (!/^\/(?:[a-z0-9-]+\/)*$/.test(page) || excluded(page))
+      throw new Error("Offline page payload has an invalid canonical path");
+    const match = /^\/offline-payload\/([a-f0-9]{64})\.txt$/.exec(payload);
+    const entry = entries.find((item) => item.url === payload);
+    if (!match || !entry || entry.digest !== match[1])
+      throw new Error("Offline page payload must be precached under its SHA-256 path");
+  }
   if (entries.length > maxResources || bytes > maxBytes || largestHtmlBytes > maxHtmlBytes)
     throw new Error("Offline corpus exceeds resource, byte or HTML budget");
   const bundled = await build({
