@@ -51,7 +51,7 @@
   },
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "test": "node scripts/verify-offline-client.mjs && node scripts/verify-offline-lifecycle.mjs && node scripts/verify-offline-api.mjs && node scripts/verify-offline-api.mjs --claim && node scripts/verify-offline.mjs && node scripts/verify-offline.mjs --claim && node scripts/verify-offline-freshness.mjs && node scripts/verify-offline-canonical.mjs",
+    "test": "node scripts/verify-offline-client.mjs && node scripts/verify-offline-lifecycle.mjs && node scripts/verify-offline-api.mjs && node scripts/verify-offline-api.mjs --claim && node scripts/verify-offline.mjs && node scripts/verify-offline.mjs --claim && node scripts/verify-offline-freshness.mjs && node scripts/verify-offline-canonical.mjs && node scripts/verify-offline-payload.mjs",
     "verify:packed": "node scripts/verify-packed.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },

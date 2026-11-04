@@ -9,6 +9,8 @@ export interface WorkerPolicy {
   navigationFallback?: string;
   navigationStrategy?: "cache-first" | "network-first";
   navigationTimeoutMs?: number;
+  /** Canonical navigation paths mapped to verified content-addressed offline HTML payloads. */
+  offlinePagePayloads?: Record<string, string>;
 }
 export interface OfflineOptions {
   cachePrefix: string;
