@@ -85,6 +85,7 @@ export function installWorker(policy, entries, revision, prefix) {
       request.mode === "navigate" &&
       url.origin === self.location.origin &&
       !excluded(url.pathname) &&
+      (policy.stripQuery || !url.search) &&
       Object.hasOwn(pagePayloads, url.pathname),
     async ({ request, url }) => {
       const abort = new AbortController();

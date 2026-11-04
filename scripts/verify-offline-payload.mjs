@@ -25,7 +25,7 @@ for (const version of ["a", "b"]) {
   const payload = `/offline-payload/${sha(html)}.txt`;
   await writeFile(join(dir, payload), html);
   await writeFile(join(dir, dataPath), data);
-  const options = { cachePrefix: "payload-test-", globPatterns: ["offline-payload/*.txt", "data/*.json"], maxBytes: 8192, worker: { claimClients: true, navigationStrategy: "network-first", navigationTimeoutMs: 500, offlinePagePayloads: { "/page/": payload } } };
+  const options = { cachePrefix: "payload-test-", globPatterns: ["offline-payload/*.txt", "data/*.json"], maxBytes: 8192, worker: { claimClients: true, stripQuery: true, navigationStrategy: "network-first", navigationTimeoutMs: 500, offlinePagePayloads: { "/page/": payload } } };
   const receipt = await generateOfflineWorker(dir, options);
   versions[version] = { dir, dataPath, html, payload, receipt, options };
 }
@@ -81,6 +81,14 @@ try {
   assert.equal(tamperedNavigation.status, 0, "tampered cached payload must not produce a document");
   assert.equal(tamperedBody, "");
   await context.close();
+  offlinePage = false; active = "a";
+  await generateOfflineWorker(versions.a.dir, { ...versions.a.options, worker: { ...versions.a.options.worker, stripQuery: false } });
+  const strictContext = await browser.newContext(), strictPage = await strictContext.newPage();
+  await strictPage.goto(origin); await poll(async () => (await state(strictPage)).active); await strictPage.reload(); await poll(async () => (await state(strictPage)).controlled);
+  offlinePage = true; await strictContext.setOffline(true);
+  await strictPage.goto(origin + "/page/"); assert.equal(await strictPage.locator("h1").innerText(), "a");
+  await assert.rejects(() => strictPage.goto(origin + "/page/?q=1"), /ERR_|net::/);
+  await strictContext.close(); active = "b";
   offlinePage = false; for (const mode of ["missing", "corrupt"]) { fault = mode; payloadRequested = false; const isolated = await browser.newContext(); const p = await isolated.newPage(); await p.goto(origin); await poll(async () => payloadRequested); await poll(async () => { const r = await state(p); return !r.installing && !r.waiting && !r.active; }); await poll(async () => !(await p.evaluate(() => caches.keys())).some((x) => x.startsWith("payload-test-"))); await isolated.close(); }
   console.log("Verified payload producer: online response, two-tab activation, offline revisions, retained data, integrity failures, unrelated cache");
 } finally { await browser.close(); await new Promise((resolve) => server.close(resolve)); await rm(root, { recursive: true, force: true }); }
