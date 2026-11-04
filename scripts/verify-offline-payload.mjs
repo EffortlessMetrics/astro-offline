@@ -33,12 +33,13 @@ await assert.rejects(() => generateOfflineWorker(versions.a.dir, { ...versions.a
 await assert.rejects(() => generateOfflineWorker(versions.a.dir, { ...versions.a.options, worker: { ...versions.a.options.worker, offlinePagePayloads: { "/page/": "/offline-payload/" + "0".repeat(64) + ".txt" } } }), /SHA-256/);
 await assert.rejects(() => generateOfflineWorker(versions.a.dir, { ...versions.a.options, worker: { ...versions.a.options.worker, offlinePagePayloads: { "/api/": versions.a.payload } } }), /invalid canonical path/);
 await assert.rejects(() => generateOfflineWorker(versions.a.dir, { ...versions.a.options, worker: { ...versions.a.options.worker, offlinePagePayloads: { "/not-canonical": versions.a.payload } } }), /invalid canonical path/);
-let active = "a", fault = "", offlinePage = false;
+let active = "a", fault = "", offlinePage = false, payloadRequested = false;
 const server = createServer(async (req, res) => {
   const path = new URL(req.url, "http://localhost").pathname;
   res.setHeader("Cache-Control", "no-store");
   if (path === "/") { res.setHeader("Content-Type", "text/html"); return res.end('<script>navigator.serviceWorker.register("/sw.js")</script>'); }
   if (path === "/page/") { if (offlinePage) { req.socket.destroy(); return; } res.setHeader("Content-Type", "text/html"); return res.end(versions[active].html + '<span data-provider>Online provider output</span>'); }
+  if (fault && path === versions[active].payload) payloadRequested = true;
   if (fault === "missing" && path === versions[active].payload) { res.statusCode = 404; return res.end(); }
   try {
     // Retain release-addressed resources from both releases, regardless of active version.
@@ -55,7 +56,7 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch();
 async function poll(fn) { for (let i = 0; i < 150; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 200)); } throw Error("Timed out waiting for worker state"); }
-async function state(page) { return page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return { active: !!r?.active, waiting: !!r?.waiting, controlled: !!navigator.serviceWorker.controller }; }); }
+async function state(page) { return page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return { active: !!r?.active, waiting: !!r?.waiting, installing: !!r?.installing, controlled: !!navigator.serviceWorker.controller }; }); }
 try {
   const context = await browser.newContext();
   const a = await context.newPage(); await a.goto(origin); await poll(async () => (await state(a)).active); await a.reload(); await poll(async () => (await state(a)).controlled);
@@ -80,6 +81,6 @@ try {
   assert.equal(tamperedNavigation.status, 0, "tampered cached payload must not produce a document");
   assert.equal(tamperedBody, "");
   await context.close();
-  offlinePage = false; for (const mode of ["missing", "corrupt"]) { fault = mode; const isolated = await browser.newContext(); const p = await isolated.newPage(); await p.goto(origin); await new Promise((r) => setTimeout(r, 3000)); assert.equal((await state(p)).active, false); assert.equal((await p.evaluate(() => caches.keys())).some((x) => x.startsWith("payload-test-")), false); await isolated.close(); }
+  offlinePage = false; for (const mode of ["missing", "corrupt"]) { fault = mode; payloadRequested = false; const isolated = await browser.newContext(); const p = await isolated.newPage(); await p.goto(origin); await poll(async () => payloadRequested); await poll(async () => { const r = await state(p); return !r.installing && !r.waiting && !r.active; }); await poll(async () => !(await p.evaluate(() => caches.keys())).some((x) => x.startsWith("payload-test-"))); await isolated.close(); }
   console.log("Verified payload producer: online response, two-tab activation, offline revisions, retained data, integrity failures, unrelated cache");
 } finally { await browser.close(); await new Promise((resolve) => server.close(resolve)); await rm(root, { recursive: true, force: true }); }
