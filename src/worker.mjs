@@ -6,6 +6,48 @@ export function installWorker(policy, entries, revision, prefix) {
   const digests = new Map(
     entries.map((entry) => [new URL(entry.url, self.location.origin).pathname, entry.digest]),
   );
+  const digestResponse = async (response) =>
+    Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-256", await response.clone().arrayBuffer())),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+  // The marker is internal CacheStorage metadata, never a routed or fetched URL.
+  // Only a fully activated predecessor may advertise reusable responses.
+  const reusePolicyKey = policy.reuseUnchangedPolicyKey;
+  const reuseMarker = new URL("/_meta/offline-reuse?internal=activated", self.location.origin).href;
+  async function seedUnchangedResponses(controller) {
+    if (!reusePolicyKey) return;
+    try {
+      const sources = [];
+      for (const name of await caches.keys()) {
+        if (name === cacheName || !name.startsWith(prefix) || !/^[a-f0-9]{20}$/.test(name.slice(prefix.length)))
+          continue;
+        const cache = await caches.open(name);
+        const marker = await cache.match(reuseMarker);
+        if (marker && (await marker.text()) === reusePolicyKey) sources.push(cache);
+      }
+      // Do not guess which predecessor is authoritative when state is ambiguous.
+      if (sources.length !== 1) return;
+      const source = sources[0];
+      const target = await caches.open(cacheName);
+      for (const entry of entries) {
+        try {
+          const key = controller.getCacheKeyForURL(entry.url);
+          if (!key) continue;
+          // Workbox's key includes the original URL and exact SHA-256 revision.
+          const response = await source.match(key);
+          if (!response || response.status !== 200 || response.type === "opaque" || response.redirected)
+            continue;
+          if ((await digestResponse(response)) !== entry.digest) continue;
+          await target.put(key, response);
+        } catch {
+          // A missing, corrupt, unreadable or uncopyable response is a network miss.
+        }
+      }
+    } catch {
+      // Optimization only. Full verified network installation remains available.
+    }
+  }
   const controller = new PrecacheController({
     cacheName,
     plugins: [
@@ -16,12 +58,7 @@ export function installWorker(policy, entries, revision, prefix) {
           if (!response.ok || response.type === "opaque")
             throw new Error("Incomplete offline corpus");
           const expected = digests.get(new URL(request.url).pathname);
-          const actual = Array.from(
-            new Uint8Array(
-              await crypto.subtle.digest("SHA-256", await response.clone().arrayBuffer()),
-            ),
-            (byte) => byte.toString(16).padStart(2, "0"),
-          ).join("");
+          const actual = await digestResponse(response);
           if (actual !== expected) throw new Error("Mixed build offline corpus");
           return response;
         },
@@ -33,6 +70,7 @@ export function installWorker(policy, entries, revision, prefix) {
     event.waitUntil(
       (async () => {
         try {
+          await seedUnchangedResponses(controller);
           await controller.install(event);
         } catch (error) {
           await caches.delete(cacheName);
@@ -56,6 +94,12 @@ export function installWorker(policy, entries, revision, prefix) {
             ((!policy.legacyRootScopeOnly || rootScope) && legacy.has(name))
           )
             await caches.delete(name);
+        if (reusePolicyKey) {
+          try {
+            const cache = await caches.open(cacheName);
+            await cache.put(reuseMarker, new Response(reusePolicyKey));
+          } catch { /* No reuse marker means a full verified download next time. */ }
+        }
       })(),
     ),
   );
