@@ -58,7 +58,10 @@ try {
     await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
     await navigator.serviceWorker.ready;
   });
-  await page.waitForFunction(() => navigator.serviceWorker.controller);
+  await page.waitForFunction(async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    return navigator.serviceWorker.controller && registration.active?.state === "activated";
+  });
   const cacheA = prefix + versions.a.revision;
   const cacheB = prefix + versions.b.revision;
   await page.evaluate(async (name) => {
@@ -72,12 +75,30 @@ try {
   async function update(version, expectWaiting) {
     serving = version;
     requested.length = 0;
-    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
-    await page.waitForFunction(async () => {
+    const state = await page.evaluate(async () => {
       const registration = await navigator.serviceWorker.getRegistration();
-      return !registration.installing;
+      const replacement = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("No replacement worker terminal state")), 30000);
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          if (!worker) return;
+          const observe = () => {
+            if (["installed", "redundant", "activated"].includes(worker.state)) {
+              clearTimeout(timeout);
+              resolve(worker.state);
+            }
+          };
+          worker.addEventListener("statechange", observe);
+          observe();
+        }, { once: true });
+      });
+      await registration.update();
+      return replacement;
     });
-    assert.equal(await page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)), expectWaiting);
+    console.log(JSON.stringify({ version, terminalState: state, requested }));
+    assert.equal(state, expectWaiting ? "installed" : "redundant");
+    if (expectWaiting) await page.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting));
+    else assert.equal(await page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)), false);
     return [...requested];
   }
   const bRequests = await update("b", true);
