@@ -30,6 +30,12 @@ export async function generateOfflineWorker(directory, options) {
     !["cache-first", "network-first"].includes(worker.navigationStrategy)
   )
     throw new Error("Unknown offline navigation strategy");
+  if (
+    worker.reuseUnchangedPolicyKey !== undefined &&
+    (typeof worker.reuseUnchangedPolicyKey !== "string" ||
+      !/^[a-f0-9]{64}$/.test(worker.reuseUnchangedPolicyKey))
+  )
+    throw new Error("Offline incremental reuse requires an exact SHA-256 response-policy identity");
   const manifest = await getManifest({
     globDirectory: directory,
     globPatterns,

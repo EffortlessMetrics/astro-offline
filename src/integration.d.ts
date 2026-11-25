@@ -9,6 +9,9 @@ export interface WorkerPolicy {
   navigationFallback?: string;
   navigationStrategy?: "cache-first" | "network-first";
   navigationTimeoutMs?: number;
+  /** Opt-in SHA-256 identity of effective hosted response metadata/routing policy.
+   * Reuse only from an activated predecessor with the same identity. */
+  reuseUnchangedPolicyKey?: string;
   /** Canonical navigation paths mapped to verified content-addressed offline HTML payloads. */
   offlinePagePayloads?: Record<string, string>;
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6 - unpublished verified incremental candidate
+
+Opt-in reuse by exact URL/digest and explicit response-policy identity from an activated predecessor. Rehash copies, fetch misses, reject mixed updates, preserve active corpus and natural activation. No registry publication or consumer adoption. Hosted availability/metadata verification remains independent.
+
 ## 0.1.5 - unpublished explicit index document alias candidate
 
 Allow explicit `index.html` document navigations to read verified directory-only corpus entries, including root and nested routes. Preserve exact cached files, resource requests, query and exclusion policies, relative assets and immutable caches. Browser qualification covers directory-only and index-file corpora through three offline/reconnect cycles. No package publication or consumer upgrade.
